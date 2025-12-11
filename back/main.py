@@ -6,6 +6,7 @@ from telebot import types
 import logging
 import database_records as db
 import config as cfg
+import re
 
 today = datetime.datetime.today().date()
 
@@ -17,6 +18,31 @@ logging.basicConfig(
     filemode="a",
     format="%(asctime)s %(levelname)s %(message)s",
 )
+
+# class Messages:
+#
+#
+#
+#
+# class Services:
+#     def __init__(self, service_name):
+#         self.service_name = service_name
+#
+#     def
+
+global name_delete
+
+service_add_list={
+    'service_name':'',
+    'service_price':''
+}
+service_edit = {
+    'type':'',
+    'name':''
+}
+
+#regex
+price_regex = "[0-9]"
 
 # указываем токен для доступа к боту
 bot = telebot.TeleBot(cfg.bot_key)
@@ -40,6 +66,9 @@ def edit_message(message, text, markup):
 def start(message):
     send_message(message, start_txt, start_menu())
 
+def zero_button():
+    return types.InlineKeyboardMarkup(row_width=2)
+
 
 #Набор кнопок для старта
 def start_menu():
@@ -49,22 +78,94 @@ def start_menu():
     markup.add(services, requests)
     return markup
 
+def to_start_menu():
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    to_start_menu = types.InlineKeyboardButton("\U00002B05 Назад", callback_data='to_start_menu')
+    markup.add(to_start_menu)
+    return markup
+
 #Набор кнопок для "Услуги"
 def servises_menu():
     markup = types.InlineKeyboardMarkup(row_width=2)
-    services_list = types.InlineKeyboardButton("Список услуг", callback_data='service_list')
-    services_add = types.InlineKeyboardButton("Добавить услугу", callback_data='service_add')
-    to_start_menu = types.InlineKeyboardButton("Назад", callback_data='to_start_menu')
-    markup.add(services_list, services_add, to_start_menu)
+    services_list = types.InlineKeyboardButton("\U0001F4C3 Список услуг", callback_data='service_list')
+    services_add = types.InlineKeyboardButton("\U0000270D Добавить услугу", callback_data='service_add')
+    service_edit = types.InlineKeyboardButton("\U0000270F Редактировать услугу", callback_data='service_edit')
+    service_delete= types.InlineKeyboardButton("\U0001F5D1 Удалить услугу", callback_data='service_delete')
+    to_start_menu = types.InlineKeyboardButton("\U00002B05 Назад", callback_data='to_start_menu')
+    markup.add(services_list, services_add, service_edit, service_delete, to_start_menu)
+    return markup
+
+
+def to_service_menu():
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    to_services = types.InlineKeyboardButton("Назад", callback_data='services')
+    markup.add(to_services)
     return markup
 
 #Набор кнопок для "Заявки"
 def requests_menu():
     markup = types.InlineKeyboardMarkup(row_width=1)
     request_list = types.InlineKeyboardButton("Список заявок", callback_data='request_list')
-    to_start_menu = types.InlineKeyboardButton("Назад", callback_data='to_start_menu')
+    to_start_menu = types.InlineKeyboardButton("\U00002B05 Назад", callback_data='to_start_menu')
     markup.add(request_list, to_start_menu)
     return markup
+
+
+def service_add_name(message):
+    service_add_list['service_name'] = message.text
+    add = bot.send_message(message.chat.id, "Введите стоимость")
+    bot.register_next_step_handler(add, service_add_price)
+
+def service_add_price(message):
+    #bot.register_next_step_handler(send_message(message, "Неверный формат цены", zero_button()), service_price)
+    service_add_list['service_price'] = message.text
+    markup = zero_button()
+    services_buh = types.InlineKeyboardButton("Бухгалтерия", callback_data='buh')
+    services_law = types.InlineKeyboardButton("Юриспруденция", callback_data="law")
+    markup.add(services_buh, services_law)
+    send_message(message, "Выберите вид услуги", markup)
+
+def add_service(name, price, type):
+    return db.add_service(name, int(price), type)
+
+def service_edit_name(message):
+    service_edit['name']=message.text
+    markup = zero_button()
+    service_edit_name = types.InlineKeyboardButton("Название", callback_data="service_edit_name")
+    service_edit_price = types.InlineKeyboardButton("Цена", callback_data="service_edit_price")
+    markup.add(service_edit_name,service_edit_price)
+    send_message(message, "Выберите что изменить", markup)
+
+def service_edit_save(message):
+    if db.edit_service(service_edit['name'], service_edit['type'], message.text):
+        send_message(message, "\U00002705 Изменнения успешно сохранены", to_service_menu())
+    else:
+        send_message(message, '\U0001F625 Возникли ошибки при сохранении изменений', to_service_menu())
+
+
+
+def service_delete_name(message):
+    name_delete = message.text
+    if name_delete == "Отмена":
+        send_message(message, "Меню услуги", servises_menu())
+        return
+    service = db.get_service(name_delete)
+    if  service != "":
+        delete = bot.send_message(message.chat.id, f"Вы уверенны, что хотите удалить следующую услугу (напишите Да)? \n {service}")
+        bot.register_next_step_handler(delete, service_delete, message.text)
+    else:
+        delete = bot.send_message(message.chat.id, "Услуга не найдена \n Введите название услуги или напишите \"Отмена\"")
+        bot.register_next_step_handler(delete, service_delete_name)
+
+def service_delete(message, name):
+    print(name)
+    if message.text == "Да":
+        if db.delete_service(name):
+            send_message(message, "\U00002705 Услуга удалена", to_service_menu())
+        else:
+            send_message(message, '\U0001F625 Возникли ошибки при удалении', to_service_menu())
+    else:
+        edit_message(call.message, "Выберите вариант", servises_menu())
 
 
 #Обработчик нажатых кнопок
@@ -74,24 +175,36 @@ def check_callback_data(call):
         edit_message(call.message, "Выберите вариант", servises_menu())
     elif call.data == "service_list":
         list = db.get_servises_list()
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        to_services = types.InlineKeyboardButton("Назад", callback_data='services')
-        markup.add(to_services)
-        bot.edit_message_text(f"Список \n {list}", call.message.chat.id, call.message.message_id, reply_markup=markup)
+        edit_message(call.message, f"Список \n {list}", to_service_menu())
+    elif call.data=="service_add":
+        add = bot.send_message(call.message.chat.id, "Введите название услуги")
+        bot.register_next_step_handler(add, service_add_name)
     elif call.data == "requests":
         edit_message(call.message, "Выберите вариант", requests_menu())
     elif call.data == "to_start_menu":
         edit_message(call.message, start_txt, start_menu())
+    elif call.data in ("buh", "law"):
+        name = service_add_list['service_name']
+        price = service_add_list['service_price']
+        if add_service(name, price, call.data):
+            send_message(call.message, "\U00002705 Услуга добавлена", to_service_menu())
+        else:
+            send_message(call.message, "\U0001F625 Ошибка добавления услуги", to_service_menu())
+    elif call.data == "service_edit":
+        edit = bot.send_message(call.message.chat.id, "Введите название услуги")
+        bot.register_next_step_handler(edit, service_edit_name)
+    elif call.data in ("service_edit_name", "service_edit_price"):
+        service_edit["type"] = "name" if call.data=="service_edit_name" else "price"
+        edit = bot.send_message(call.message.chat.id, "Введите новое значение")
+        bot.register_next_step_handler(edit, service_edit_save)
+    elif call.data == "service_delete":
+        delete = bot.send_message(call.message.chat.id, "Введите название услуги")
+        bot.register_next_step_handler(delete, service_delete_name)
     elif  call.data== "request_list":
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        to_start_menu = types.InlineKeyboardButton("Назад", callback_data='to_start_menu')
-        markup.add(to_start_menu)
-        edit_message(call.message, "Список пуст", markup)
+        edit_message(call.message, "Список пуст", to_start_menu())
+
     else:
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        to_start_menu = types.InlineKeyboardButton("Назад", callback_data='to_start_menu')
-        markup.add(to_start_menu)
-        edit_message(call.message, "Список пуст", markup)
+        edit_message(call.message, "Список пуст", to_start_menu())
 
 
 @bot.message_handler(content_types="text")
