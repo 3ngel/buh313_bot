@@ -1,5 +1,4 @@
 import datetime
-
 import requests
 import telebot
 from telebot import types
@@ -19,18 +18,26 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
 )
 
-# class Messages:
-#
-#
-#
-#
-# class Services:
-#     def __init__(self, service_name):
-#         self.service_name = service_name
-#
-#     def
+service_add_list={
+    'service_name':'',
+    'service_price':''
+}
+service_edit = {
+    'type':'',
+    'name':''
+}
 
+#regex
+price_regex = "[0-9]"
+
+# указываем токен для доступа к боту
+bot = telebot.TeleBot(cfg.bot_key)
+start_txt = 'Привет! \n\nТеперь можете работать с ботом "БухгалтерИя".'
+
+
+#Вариации кнопок в боте
 class Menu:
+    #Пустая форма
     def zero_button():
         return types.InlineKeyboardMarkup(row_width=2)
 
@@ -41,7 +48,7 @@ class Menu:
         requests = types.InlineKeyboardButton("Заявки", callback_data='requests')
         markup.add(services, requests)
         return markup
-
+    #Кнопка "Назад", которая ведёт к стартовому меню
     def to_start():
         markup = types.InlineKeyboardMarkup(row_width=2)
         to_start_menu = types.InlineKeyboardButton("\U00002B05 Назад", callback_data='to_start_menu')
@@ -59,6 +66,7 @@ class Menu:
         markup.add(services_list, services_add, service_edit, service_delete, to_start_menu)
         return markup
 
+    # Кнопка "Назад", которая ведёт к меню Услуг
     def to_service():
         markup = types.InlineKeyboardMarkup(row_width=2)
         to_services = types.InlineKeyboardButton("Назад", callback_data='services')
@@ -89,13 +97,13 @@ class Services:
             markup.add(services_buh, services_law)
             send_message(message, "Выберите вид услуги", markup)
         def save(name, price, type):
-            return db.add_service(name, int(price), type)
+            return db.Services.add.add_service(name, int(price), type)
     class edit:
         def name(message):
             if message.text == "Отмена":
                 send_message(message, "Список доступных услуг", Menu.servises())
             service_edit['name'] = message.text
-            if db.get_service(message.text) != "":
+            if db.Services.select.service(message.text) != "":
                 markup = Menu.servises()
                 service_edit_name = types.InlineKeyboardButton("Название", callback_data="service_edit_name")
                 service_edit_price = types.InlineKeyboardButton("Цена", callback_data="service_edit_price")
@@ -106,7 +114,7 @@ class Services:
                 bot.register_next_step_handler(edit, Services.edit.name)
 
         def save(message):
-            if db.edit_service(service_edit['name'], service_edit['type'], message.text):
+            if db.Services.edit.edit_service(service_edit['name'], service_edit['type'], message.text):
                 send_message(message, "\U00002705 Изменнения успешно сохранены", Menu.to_service())
             else:
                 send_message(message, '\U0001F625 Возникли ошибки при сохранении изменений', Menu.to_service())
@@ -116,7 +124,7 @@ class Services:
             if name_delete == "Отмена":
                 send_message(message, "Меню услуги", Menu.servises())
                 return
-            service = db.get_service(name_delete)
+            service = db.Services.select.service(name_delete)
             if service != "":
                 delete = bot.send_message(message.chat.id,
                                           f"Вы уверенны, что хотите удалить следующую услугу (напишите Да)? \n {service}")
@@ -128,29 +136,12 @@ class Services:
 
         def save(message, name):
             if message.text == "Да":
-                if db.delete_service(name):
+                if db.Services.delete.delete_service(name):
                     send_message(message, "\U00002705 Услуга удалена", Menu.to_service())
                 else:
                     send_message(message, '\U0001F625 Возникли ошибки при удалении', Menu.to_service())
             else:
                 send_message(message, "Выберите вариант", Menu.servises())
-
-
-service_add_list={
-    'service_name':'',
-    'service_price':''
-}
-service_edit = {
-    'type':'',
-    'name':''
-}
-
-#regex
-price_regex = "[0-9]"
-
-# указываем токен для доступа к боту
-bot = telebot.TeleBot(cfg.bot_key)
-start_txt = 'Привет! \n\nТеперь можете работать с ботом "БухгалтерИя".'
 
 
 #Отправка сообщения ботом
@@ -176,7 +167,7 @@ def check_callback_data(call):
     if call.data == "services":
         edit_message(call.message, "Выберите вариант", Menu.servises())
     elif call.data == "service_list":
-        list = db.get_servises_list()
+        list = db.Services.select.servises_list()
         edit_message(call.message, f"Список \n {list}", Menu.to_service())
     elif call.data=="service_add":
         add = bot.send_message(call.message.chat.id, "Введите название услуги")
