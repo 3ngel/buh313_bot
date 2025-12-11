@@ -8,6 +8,67 @@ conn = psycopg2.connect(dbname=cfg.database_name, host=cfg.database_url, user=cf
 cur = conn.cursor()
 
 
+class Authorization:
+    def check_email(email):
+        cur.execute(f"SELECT * FROM {cfg.database_name}.users WHERE email = '{email}' LIMIT 1")
+        records = cur.fetchall()
+        return False if records == "" else True
+
+    def save_code(email, code):
+        try:
+            cur.execute(f"INSERT INTO {cfg.database_name}.sms_codes(email, sms_code) VALUES (%s,%s)",
+                        (email, code))
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+    def get_code(email, code):
+        cur.execute(
+            f"SELECT sms_code FROM {cfg.database_name}.sms_codes WHERE email = '{email}' AND sms_code = '{code}'")
+        records = cur.fetchall()
+        return False if records == "" else True
+
+    def delete_code(email):
+        try:
+            cur.execute(f"DELETE FROM {cfg.database_name}.sms_codes WHERE email = '{email}'")
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+
+class Users:
+    def save_user(email, user_id, user_name):
+        try:
+            cur.execute(
+                f"UPDATE {cfg.database_name}.users SET user_id=%s, user_name=%s, authorized = true WHERE email=%s",
+                (user_id, user_name, email))
+        except psycopg2.DatabaseError as err:
+            print("Error: ", err)
+            return False
+        else:
+            conn.commit()
+            return True
+
+    class Get:
+        def by_user_id(user_id):
+            cur.execute(
+                f"SELECT authorized, deleted FROM {cfg.database_name}.users WHERE user_id = '{user_id}' LIMIT 1")
+            records = cur.fetchall()
+            if records == "":
+                return "", ""
+            for authorized, deleted in records:
+                return authorized, deleted
+
+        def by_email(email):
+            print("")
+
+
 class Services:
     class select:
         def servises_list(self):
@@ -64,4 +125,4 @@ class Services:
 
 
 if __name__ == '__main__':
-    print(Services.select.service("Тестовая"))
+    print(Authorization.check_email("angelina_panfilova@bk.ru"))

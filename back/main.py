@@ -6,6 +6,8 @@ import logging
 import database_records as db
 import config as cfg
 import re
+import send_email as Email
+import random
 
 today = datetime.datetime.today().date()
 
@@ -33,6 +35,30 @@ price_regex = "[0-9]"
 # указываем токен для доступа к боту
 bot = telebot.TeleBot(cfg.bot_key)
 start_txt = 'Привет! \n\nТеперь можете работать с ботом "БухгалтерИя".'
+
+
+
+class Authorization:
+    def send_code(message):
+        email = message.text
+        if db.Authorization.check_email(email):
+            code = random.randint(100000, 999999)
+            if db.Authorization.save_code(email, code):
+                Email.send_email(email, "Код проверки", f"Ваш код проверки: {code}. \n Никому не сообщайте его")
+                add = bot.send_message(message.chat.id, "Введите отправленный код доступа")
+                bot.register_next_step_handler(add, Authorization.check_code, email)
+            else:
+                return
+        else:
+            send_message(message, "Почта не найдена", Menu.zero_button())
+    def check_code(message, email):
+        code = message.text
+        if db.Authorization.get_code(email, code):
+            db.Authorization.delete_code(email)
+            db.Users.save_user(email, message.chat.id, message.chat.username)
+            send_message(message, "Вы успешно прошли авторизацию", Menu.start())
+        else:
+            send_message(message, "Ты лох, попробуй заново", Menu.zero_button())
 
 
 #Вариации кнопок в боте
@@ -149,7 +175,6 @@ def send_message(message, text, markup):
     logging.info(f"{text} от пользвоателя {message.chat.username} . Чат {message.chat.id}")
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
-
 #Редактирование существующего сообщения
 def edit_message(message, text, markup):
     logging.info(f"{text} от пользвоателя {message.chat.username} . Чат {message.chat.id}")
@@ -159,7 +184,12 @@ def edit_message(message, text, markup):
 #Запуск бота
 @bot.message_handler(commands=['start'])
 def start(message):
-    send_message(message, start_txt, Menu.start())
+    authorized, deleted = db.Users.Get.by_user_id(message.chat.id)
+    if authorized == True and deleted == False:
+        send_message(message, start_txt, Menu.start())
+    elif authorized==deleted== False:
+        start = bot.send_message(message.chat.id, "Введите свою электронную почту")
+        bot.register_next_step_handler(start, Authorization.send_code)
 
 #Обработчик нажатых кнопок
 @bot.callback_query_handler(func=lambda call: True)
